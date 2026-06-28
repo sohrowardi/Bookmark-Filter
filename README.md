@@ -1,30 +1,26 @@
 # Bookmark Filter
 
-Bookmark Filter lets you export only the bookmark folders you want from a Firefox bookmark export.
+### https://sohrowardi.github.io/Bookmark-Filter/
 
-Firefox can only export **all** bookmarks at once. This tool lets you select specific folders and create a new HTML file containing only those folders, making it easy to share or import them elsewhere.
+Ever wanted to share just one bookmark folder with someone?
+
+Most browsers only let you export **all** of your bookmarks. Bookmark Filter lets you choose the folders you want and creates a new bookmark HTML file containing only those folders.
+
+No uploads. No account. Everything stays on your device.
 
 ## Features
 
-* Open a Firefox bookmarks HTML file
-* Select one or more bookmark folders
-* Export only the selected folders
-* Import the new HTML file back into Firefox
+* Open a bookmark HTML export
+* Choose the folders you want to keep
+* Export a new HTML file
+* Import it into any browser that supports bookmark HTML imports
 * Works completely offline
-
-## Web Version
-
-https://sohrowardi.github.io/Bookmark-Filter/
 
 ## Python Version
 
-The `.py` folder contains the original desktop version.
+The `.py` folder contains the original desktop version of the project.
 
-* `main.py` – Application entry point
-* `parser.py` – Parses bookmark HTML files
-* `exporter.py` – Creates the filtered HTML export
+* `main.py` – Starts the application
+* `parser.py` – Reads bookmark HTML files
+* `exporter.py` – Creates the filtered bookmark export
 * `tests.py` – Test file
-
-## License
-
-MIT License
