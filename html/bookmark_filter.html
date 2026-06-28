@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firefox Bookmark Filter</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface2: #f9f9f8;
+    --border: #e4e4e0;
+    --border2: #d0d0cc;
+    --text: #1c1c1a;
+    --text2: #6b6b66;
+    --text3: #9a9a94;
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --accent-text: #1d4ed8;
+    --accent-border: #bfdbfe;
+    --danger: #dc2626;
+    --success: #16a34a;
+    --partial: #d97706;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  [data-dark] {
+    --bg: #141414;
+    --surface: #1e1e1e;
+    --surface2: #252525;
+    --border: #2e2e2e;
+    --border2: #3a3a3a;
+    --text: #e4e4e0;
+    --text2: #9a9a94;
+    --text3: #6b6b66;
+    --accent: #3b82f6;
+    --accent-bg: #1e3a5f;
+    --accent-text: #93c5fd;
+    --accent-border: #1e40af;
+    --partial: #f59e0b;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ─────────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .logo svg { color: var(--accent); }
+  header .spacer { flex: 1; }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+
+  /* ── Buttons ─────────────────────────────────────── */
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: var(--radius);
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    color: var(--text);
+    padding: 6px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.1s, border-color 0.1s;
+    white-space: nowrap;
+  }
+  button:hover { background: var(--surface2); border-color: var(--border2); }
+  button:active { opacity: 0.85; }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    font-weight: 500;
+  }
+  button.primary:hover { opacity: 0.9; background: var(--accent); }
+  button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.icon-btn {
+    padding: 6px 8px;
+    font-size: 16px;
+  }
+  button.ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+  button.ghost:hover { background: var(--surface2); }
+
+  /* ── Toolbar ─────────────────────────────────────── */
+  .toolbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 160px;
+    max-width: 320px;
+  }
+  .search-wrap svg {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text3);
+    pointer-events: none;
+  }
+  .search-wrap input {
+    width: 100%;
+    padding: 6px 10px 6px 32px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-wrap input::placeholder { color: var(--text3); }
+  .toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+
+  /* ── Main layout ─────────────────────────────────── */
+  .app-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .left-pane {
+    width: 58%;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .right-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-header {
+    padding: 8px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+  .pane-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .pane-scroll::-webkit-scrollbar { width: 6px; }
+  .pane-scroll::-webkit-scrollbar-track { background: transparent; }
+  .pane-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── Drop zone ───────────────────────────────────── */
+  #drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex: 1;
+    padding: 40px;
+    cursor: pointer;
+    border: 2px dashed var(--border2);
+    border-radius: 12px;
+    margin: 24px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #drop-zone:hover, #drop-zone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+  #drop-zone svg { color: var(--text3); transition: color 0.15s; }
+  #drop-zone:hover svg, #drop-zone.dragover svg { color: var(--accent); }
+  #drop-zone h2 { font-size: 16px; font-weight: 600; color: var(--text); }
+  #drop-zone p { font-size: 13px; color: var(--text2); text-align: center; line-height: 1.6; }
+  #drop-zone .or { font-size: 12px; color: var(--text3); }
+  #file-input { display: none; }
+
+  /* ── Tree ────────────────────────────────────────── */
+  #tree-container { padding: 6px 4px; }
+  .tree-node { user-select: none; }
+  .tree-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px 3px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    min-height: 28px;
+  }
+  .tree-row:hover { background: var(--surface2); }
+  .tree-row.filtered-hidden { display: none; }
+
+  .chevron-btn {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--text3);
+    border-radius: 4px;
+    flex-shrink: 0;
+    font-size: 10px;
+    transition: transform 0.15s;
+  }
+  .chevron-btn:hover { background: var(--border); color: var(--text); }
+  .chevron-btn.open { transform: rotate(90deg); }
+  .chevron-placeholder { width: 18px; flex-shrink: 0; }
+
+  /* Custom checkbox */
+  .cb {
+    width: 15px;
+    height: 15px;
+    border: 1.5px solid var(--border2);
+    border-radius: 4px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, border-color 0.1s;
+    cursor: pointer;
+    background: var(--surface);
+  }
+  .cb[data-state="checked"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .cb[data-state="partial"] {
+    background: var(--partial);
+    border-color: var(--partial);
+    color: #fff;
+  }
+  .cb svg { pointer-events: none; }
+
+  .folder-icon { font-size: 14px; flex-shrink: 0; line-height: 1; }
+  .tree-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .tree-count {
+    font-size: 11px;
+    color: var(--text3);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .tree-children { display: none; }
+  .tree-children.open { display: block; }
+
+  /* ── Preview panel ───────────────────────────────── */
+  .preview-inner { padding: 16px; }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .stat-card .val {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .stat-card .val.accent { color: var(--accent-text); }
+  .stat-card .lbl { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+  .sel-list { display: flex; flex-direction: column; gap: 4px; }
+  .sel-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+  .sel-item .sel-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sel-item .sel-count { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+  .empty-preview {
+    text-align: center;
+    color: var(--text3);
+    font-size: 13px;
+    padding: 32px 16px;
+    line-height: 1.7;
+  }
+
+  /* ── Status bar ──────────────────────────────────── */
+  .statusbar {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 5px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text3);
+    flex-shrink: 0;
+  }
+
+  /* ── Loading spinner ─────────────────────────────── */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Highlight search matches ────────────────────── */
+  .highlight { background: #fef08a; color: #78350f; border-radius: 2px; }
+  [data-dark] .highlight { background: #713f12; color: #fef9c3; }
+
+  /* ── Responsive ──────────────────────────────────── */
+  @media (max-width: 680px) {
+    .app-body { flex-direction: column; }
+    .left-pane { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 55vh; }
+    .right-pane { max-height: 45vh; }
+    .toolbar { gap: 6px; }
+    .toolbar-sep { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="#">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+    </svg>
+    Bookmark Filter
+  </a>
+  <span class="spacer"></span>
+  <div class="header-actions">
+    <button class="icon-btn ghost" id="btn-dark" title="Toggle dark mode">🌙</button>
+    <button class="primary" id="btn-export" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export filtered
+    </button>
+  </div>
+</header>
+
+<div class="toolbar" id="toolbar" style="display:none">
+  <button id="btn-open-new">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Open file
+  </button>
+  <div class="search-wrap">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="search-input" placeholder="Search folders…">
+  </div>
+  <div class="toolbar-sep"></div>
+  <button id="btn-select-all">Select all</button>
+  <button id="btn-deselect-all">Deselect all</button>
+  <div class="toolbar-sep"></div>
+  <button id="btn-expand-all">Expand all</button>
+  <button id="btn-collapse-all">Collapse all</button>
+</div>
+
+<div class="app-body">
+  <!-- Left: tree -->
+  <div class="left-pane">
+    <div class="pane-header" id="tree-pane-header">Folder tree</div>
+    <div class="pane-scroll" id="left-scroll">
+
+      <!-- Drop zone (shown when no file loaded) -->
+      <div id="drop-zone">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+        </svg>
+        <h2>Drop your bookmarks file here</h2>
+        <p>Export from Firefox via<br><strong>Bookmarks → Manage Bookmarks → Import and Backup → Export to HTML</strong></p>
+        <span class="or">— or —</span>
+        <button class="primary" onclick="document.getElementById('file-input').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Choose file
+        </button>
+        <input type="file" id="file-input" accept=".html,.htm">
+      </div>
+
+      <!-- Tree (shown after file loaded) -->
+      <div id="tree-container" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Right: preview -->
+  <div class="right-pane">
+    <div class="pane-header">Live preview</div>
+    <div class="pane-scroll">
+      <div class="preview-inner" id="preview">
+        <div class="empty-preview">
+          Open a bookmarks file to see<br>the folder tree and live preview.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="status-text">Ready — open a Firefox bookmarks HTML file to begin.</span>
+  <span id="status-right"></span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let rootNode = null;
+let selectedIds = new Set();
+let allFolderNodes = [];
+let darkMode = localStorage.getItem('bm_dark') === '1';
+
+// ═══════════════════════════════════════════════════════
+//  PARSER
+//
+//  After browser DOMParser, Firefox bookmark HTML structure is:
+//
+//  <DL>                          ← folder container
+//    <DT>                        ← each entry is a DT
+//      <H3>Folder name</H3>      ← folder header
+//      <DL>                      ← folder's children DL is INSIDE the DT
+//        <DT><A href>Title</A>
+//        <DT><H3>Sub...</H3><DL>...</DL>
+//      </DL>
+//    </DT>
+//    <DT><A href="...">Bookmark</A></DT>
+//    <HR>
+//  </DL>
+//
+//  So we just look for :scope > dl inside each DT to get sub-folders.
+// ═══════════════════════════════════════════════════════
+function parseBookmarks(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const root = { kind: 'root', title: '__root__', children: [], attrs: {}, id: uid() };
+
+  const topDL = doc.body.querySelector('dl');
+  if (topDL) parseDL(topDL, root);
+
+  annotate(root);
+  return root;
+}
+
+function parseDL(dl, parentNode) {
+  for (const child of dl.children) {
+    const tag = child.tagName.toUpperCase();
+    if (tag === 'DT') {
+      const h3  = child.querySelector(':scope > h3');
+      const a   = child.querySelector(':scope > a');
+      const sub = child.querySelector(':scope > dl');
+      if (h3) {
+        const folder = {
+          kind: 'folder',
+          title: h3.textContent.trim(),
+          id: uid(),
+          children: [],
+          attrs: getAttrs(h3),
+          totalBookmarks: 0,
+        };
+        parentNode.children.push(folder);
+        if (sub) parseDL(sub, folder);
+      } else if (a) {
+        parentNode.children.push({
+          kind: 'bookmark',
+          title: a.textContent.trim(),
+          url: a.getAttribute('href') || '',
+          id: uid(),
+          children: [],
+          attrs: getAttrs(a),
+          totalBookmarks: 0,
+        });
+      }
+    } else if (tag === 'HR') {
+      parentNode.children.push({ kind: 'separator', id: uid(), children: [], attrs: {} });
+    }
+  }
+}
+
+function getAttrs(el) {
+  const obj = {};
+  for (const attr of el.attributes) {
+    obj[attr.name.toUpperCase()] = attr.value;
+  }
+  return obj;
+}
+
+let _uid = 0;
+function uid() { return ++_uid; }
+
+function annotate(node) {
+  if (node.kind === 'bookmark') {
+    node.totalBookmarks = 1;
+  } else {
+    node.totalBookmarks = 0;
+    for (const child of node.children) {
+      annotate(child);
+      node.totalBookmarks += child.totalBookmarks;
+    }
+  }
+}
+
+function collectFolders(node, out = []) {
+  if (node.kind === 'folder') out.push(node);
+  for (const c of node.children) collectFolders(c, out);
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPORTER  (port of exporter.py)
+// ═══════════════════════════════════════════════════════
+function exportBookmarks(root, selectedIds) {
+  const ancestorIds = computeAncestors(root, selectedIds);
+  const includeIds = new Set([...selectedIds, ...ancestorIds]);
+
+  const lines = [
+    '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n',
+    '<!-- This is an automatically generated file.\n',
+    '     It will be read and overwritten.\n',
+    '     DO NOT EDIT! -->\n',
+    '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n',
+    '<TITLE>Bookmarks</TITLE>\n',
+    '<H1>Bookmarks Menu</H1>\n\n',
+    '<DL><p>\n',
+  ];
+
+  for (const child of root.children) {
+    serializeNode(child, includeIds, selectedIds, lines, 1);
+  }
+  lines.push('</DL><p>\n');
+  return lines.join('');
+}
+
+function computeAncestors(root, selectedIds) {
+  const ancestors = new Set();
+  function walk(node, path) {
+    if (node.kind === 'folder' && selectedIds.has(node.id)) {
+      for (const p of path) ancestors.add(p);
+    }
+    for (const child of node.children) {
+      walk(child, [...path, node.id]);
+    }
+  }
+  walk(root, []);
+  return ancestors;
+}
+
+function serializeNode(node, includeIds, selectedIds, lines, depth) {
+  const pad = '    '.repeat(depth);
+  if (node.kind === 'folder') {
+    if (!includeIds.has(node.id)) return;
+    const attrsStr = buildAttrs(node.attrs);
+    lines.push(`${pad}<DT><H3${attrsStr}>${escHtml(node.title)}</H3>\n`);
+    lines.push(`${pad}<DL><p>\n`);
+    for (const child of node.children) {
+      if (selectedIds.has(node.id)) {
+        serializeFull(child, lines, depth + 1);
+      } else {
+        serializeNode(child, includeIds, selectedIds, lines, depth + 1);
+      }
+    }
+    lines.push(`${pad}</DL><p>\n`);
+  } else if (node.kind === 'bookmark') {
+    serializeFull(node, lines, depth);
+  } else if (node.kind === 'separator') {
+    lines.push(`${pad}<HR>\n`);
+  }
+}
+
+function serializeFull(node, lines, depth) {
+  const pad = '    '.repeat(depth);
+  if (node.kind === 'folder') {
+    const attrsStr = buildAttrs(node.attrs);
+    lines.push(`${pad}<DT><H3${attrsStr}>${escHtml(node.title)}</H3>\n`);
+    lines.push(`${pad}<DL><p>\n`);
+    for (const child of node.children) serializeFull(child, lines, depth + 1);
+    lines.push(`${pad}</DL><p>\n`);
+  } else if (node.kind === 'bookmark') {
+    const attrsStr = buildAttrs(node.attrs);
+    lines.push(`${pad}<DT><A${attrsStr}>${escHtml(node.title)}</A>\n`);
+  } else if (node.kind === 'separator') {
+    lines.push(`${pad}<HR>\n`);
+  }
+}
+
+const ATTR_ORDER = ['HREF','ADD_DATE','LAST_MODIFIED','ICON_URI','ICON','SHORTCUTURL','TAGS','LAST_CHARSET'];
+function buildAttrs(attrs) {
+  const parts = [];
+  const seen = new Set();
+  for (const key of ATTR_ORDER) {
+    if (key in attrs) {
+      parts.push(` ${key}="${escAttr(attrs[key])}"`);
+      seen.add(key);
+    }
+  }
+  for (const [k, v] of Object.entries(attrs)) {
+    if (!seen.has(k) && k !== 'FOLDED') {
+      parts.push(` ${k}="${escAttr(v)}"`);
+    }
+  }
+  return parts.join('');
+}
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════════
+//  TREE RENDERING
+// ═══════════════════════════════════════════════════════
+function renderTree(root) {
+  const container = document.getElementById('tree-container');
+  container.innerHTML = '';
+  for (const child of root.children) {
+    if (child.kind === 'folder') {
+      container.appendChild(renderNode(child, 0));
+    }
+  }
+}
+
+function renderNode(node, depth) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tree-node';
+  wrap.dataset.id = node.id;
+
+  const row = document.createElement('div');
+  row.className = 'tree-row';
+  row.style.paddingLeft = (4 + depth * 20) + 'px';
+
+  // Chevron
+  const hasFolderChildren = node.children.some(c => c.kind === 'folder');
+  if (hasFolderChildren) {
+    const chev = document.createElement('button');
+    chev.className = 'chevron-btn' + (depth < 1 ? ' open' : '');
+    chev.innerHTML = `<svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><path d="M2 1l4 3-4 3V1z"/></svg>`;
+    chev.addEventListener('click', e => {
+      e.stopPropagation();
+      chev.classList.toggle('open');
+      childrenDiv.classList.toggle('open');
+    });
+    row.appendChild(chev);
+  } else {
+    const ph = document.createElement('span');
+    ph.className = 'chevron-placeholder';
+    row.appendChild(ph);
+  }
+
+  // Checkbox
+  const cb = document.createElement('div');
+  cb.className = 'cb';
+  cb.dataset.state = 'unchecked';
+  cb.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><polyline points="1.5,5 4,7.5 8.5,2"/></svg>`;
+  cb.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleFolder(node);
+  });
+  row.appendChild(cb);
+
+  // Icon
+  const icon = document.createElement('span');
+  icon.className = 'folder-icon';
+  icon.textContent = '📁';
+  row.appendChild(icon);
+
+  // Label
+  const label = document.createElement('span');
+  label.className = 'tree-label';
+  label.textContent = node.title || '(untitled)';
+  row.appendChild(label);
+
+  // Count
+  if (node.totalBookmarks > 0) {
+    const count = document.createElement('span');
+    count.className = 'tree-count';
+    count.textContent = node.totalBookmarks.toLocaleString();
+    row.appendChild(count);
+  }
+
+  row.addEventListener('click', () => toggleFolder(node));
+  wrap.appendChild(row);
+
+  // Children
+  const childrenDiv = document.createElement('div');
+  childrenDiv.className = 'tree-children' + (depth < 1 ? ' open' : '');
+  for (const child of node.children) {
+    if (child.kind === 'folder') {
+      childrenDiv.appendChild(renderNode(child, depth + 1));
+    }
+  }
+  wrap.appendChild(childrenDiv);
+
+  return wrap;
+}
+
+function getNodeEl(id) {
+  return document.querySelector(`.tree-node[data-id="${id}"]`);
+}
+function getCbEl(id) {
+  const el = getNodeEl(id);
+  return el ? el.querySelector('.cb') : null;
+}
+
+function setCbState(id, state) {
+  const cb = getCbEl(id);
+  if (!cb) return;
+  cb.dataset.state = state;
+  const check = cb.querySelector('svg');
+  if (state === 'checked') {
+    check.style.display = '';
+    check.innerHTML = `<polyline points="1.5,5 4,7.5 8.5,2"/>`;
+  } else if (state === 'partial') {
+    check.style.display = '';
+    check.innerHTML = `<line x1="1.5" y1="5" x2="8.5" y2="5"/>`;
+  } else {
+    check.style.display = 'none';
+  }
+}
+
+function toggleFolder(node) {
+  const current = selectedIds.has(node.id) ? 'checked' : 'unchecked';
+  const newChecked = current !== 'checked';
+  if (newChecked) {
+    selectDown(node);
+  } else {
+    deselectDown(node);
+  }
+  updateAncestors(node);
+  updatePreview();
+}
+
+function selectDown(node) {
+  selectedIds.add(node.id);
+  setCbState(node.id, 'checked');
+  for (const child of node.children) {
+    if (child.kind === 'folder') selectDown(child);
+  }
+}
+
+function deselectDown(node) {
+  selectedIds.delete(node.id);
+  setCbState(node.id, 'unchecked');
+  for (const child of node.children) {
+    if (child.kind === 'folder') deselectDown(child);
+  }
+}
+
+function updateAncestors(node) {
+  // Walk up via the tree DOM
+  const el = getNodeEl(node.id);
+  if (!el) return;
+  let parent = el.parentElement?.closest('.tree-node');
+  while (parent) {
+    const pid = parseInt(parent.dataset.id);
+    const pnode = findNodeById(rootNode, pid);
+    if (pnode) {
+      const folderChildren = pnode.children.filter(c => c.kind === 'folder');
+      const checkedCount = folderChildren.filter(c => selectedIds.has(c.id)).length;
+      const partialCount = folderChildren.filter(c => {
+        const cb = getCbEl(c.id);
+        return cb && cb.dataset.state === 'partial';
+      }).length;
+
+      if (checkedCount === folderChildren.length && folderChildren.length > 0) {
+        selectedIds.add(pid);
+        setCbState(pid, 'checked');
+      } else if (checkedCount > 0 || partialCount > 0) {
+        selectedIds.delete(pid);
+        setCbState(pid, 'partial');
+      } else {
+        selectedIds.delete(pid);
+        setCbState(pid, 'unchecked');
+      }
+    }
+    parent = parent.parentElement?.closest('.tree-node');
+  }
+}
+
+function findNodeById(node, id) {
+  if (node.id === id) return node;
+  for (const child of node.children) {
+    const found = findNodeById(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PREVIEW
+// ═══════════════════════════════════════════════════════
+function countKept(node, insideSelected) {
+  if (node.kind === 'bookmark') return insideSelected ? 1 : 0;
+  if (node.kind !== 'folder' && node.kind !== 'root') return 0;
+  const nowSelected = insideSelected || selectedIds.has(node.id);
+  return node.children.reduce((s, c) => s + countKept(c, nowSelected), 0);
+}
+
+function getTopSelected() {
+  // Folders that are selected but whose parent folder is NOT selected
+  return allFolderNodes.filter(n => {
+    if (!selectedIds.has(n.id)) return false;
+    const el = getNodeEl(n.id);
+    if (!el) return true;
+    const parentNode = el.parentElement?.closest('.tree-node');
+    if (!parentNode) return true;
+    const pid = parseInt(parentNode.dataset.id);
+    return !selectedIds.has(pid);
+  });
+}
+
+function updatePreview() {
+  const kept = countKept(rootNode, false);
+  const total = rootNode.totalBookmarks;
+  const selFolders = allFolderNodes.filter(n => selectedIds.has(n.id));
+  const excFolders = allFolderNodes.length - selFolders.length;
+
+  const topSel = getTopSelected();
+
+  const preview = document.getElementById('preview');
+  let html = `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="val accent">${selFolders.length.toLocaleString()}</div>
+        <div class="lbl">folders selected</div>
+      </div>
+      <div class="stat-card">
+        <div class="val accent">${kept.toLocaleString()}</div>
+        <div class="lbl">bookmarks kept</div>
+      </div>
+      <div class="stat-card">
+        <div class="val">${excFolders.toLocaleString()}</div>
+        <div class="lbl">folders excluded</div>
+      </div>
+      <div class="stat-card">
+        <div class="val">${(total - kept).toLocaleString()}</div>
+        <div class="lbl">bookmarks removed</div>
+      </div>
+    </div>
+    <div class="section-title">Selected folders</div>
+    <div class="sel-list">
+  `;
+
+  if (topSel.length === 0) {
+    html += `<div style="color:var(--text3);font-size:13px;padding:8px 0">No folders selected yet.</div>`;
+  } else {
+    const show = topSel.slice(0, 40);
+    for (const n of show) {
+      html += `
+        <div class="sel-item">
+          <span>📁</span>
+          <span class="sel-name">${escHtml(n.title)}</span>
+          <span class="sel-count">${n.totalBookmarks.toLocaleString()} items</span>
+        </div>`;
+    }
+    if (topSel.length > 40) {
+      html += `<div style="color:var(--text3);font-size:12px;padding:4px 0">… and ${topSel.length - 40} more</div>`;
+    }
+  }
+
+  html += '</div>';
+  preview.innerHTML = html;
+
+  document.getElementById('btn-export').disabled = selFolders.length === 0;
+}
+
+// ═══════════════════════════════════════════════════════
+//  SEARCH
+// ═══════════════════════════════════════════════════════
+let searchTimeout = null;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => applySearch(e.target.value.trim()), 150);
+});
+
+function applySearch(query) {
+  const nodes = document.querySelectorAll('.tree-node');
+  if (!query) {
+    nodes.forEach(n => {
+      n.querySelector('.tree-row').classList.remove('filtered-hidden');
+      const label = n.querySelector('.tree-label');
+      label.innerHTML = label.textContent; // strip highlights
+    });
+    return;
+  }
+  const lq = query.toLowerCase();
+  nodes.forEach(node => {
+    const label = node.querySelector('.tree-label');
+    const title = label.textContent;
+    const match = title.toLowerCase().includes(lq);
+    node.querySelector('.tree-row').classList.toggle('filtered-hidden', !match);
+    if (match) {
+      // Highlight and reveal ancestors
+      const idx = title.toLowerCase().indexOf(lq);
+      label.innerHTML = escHtml(title.slice(0, idx))
+        + `<mark class="highlight">${escHtml(title.slice(idx, idx + query.length))}</mark>`
+        + escHtml(title.slice(idx + query.length));
+      // Show parent nodes
+      let parent = node.parentElement?.closest('.tree-node');
+      while (parent) {
+        parent.querySelector('.tree-row').classList.remove('filtered-hidden');
+        const ch = parent.querySelector('.tree-children');
+        if (ch) ch.classList.add('open');
+        const chBtn = parent.querySelector('.chevron-btn');
+        if (chBtn) chBtn.classList.add('open');
+        parent = parent.parentElement?.closest('.tree-node');
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOOLBAR ACTIONS
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-select-all').addEventListener('click', () => {
+  for (const n of allFolderNodes) { selectedIds.add(n.id); setCbState(n.id, 'checked'); }
+  updatePreview();
+});
+document.getElementById('btn-deselect-all').addEventListener('click', () => {
+  selectedIds.clear();
+  for (const n of allFolderNodes) setCbState(n.id, 'unchecked');
+  updatePreview();
+});
+document.getElementById('btn-expand-all').addEventListener('click', () => {
+  document.querySelectorAll('.tree-children').forEach(el => el.classList.add('open'));
+  document.querySelectorAll('.chevron-btn').forEach(el => el.classList.add('open'));
+});
+document.getElementById('btn-collapse-all').addEventListener('click', () => {
+  document.querySelectorAll('.tree-children').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.chevron-btn').forEach(el => el.classList.remove('open'));
+  // Re-open top level
+  document.querySelectorAll('#tree-container > .tree-node > .tree-children').forEach(el => el.classList.add('open'));
+  document.querySelectorAll('#tree-container > .tree-node .chevron-btn').forEach(el => el.classList.add('open'));
+});
+document.getElementById('btn-open-new').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+
+// ═══════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════
+document.getElementById('btn-export').addEventListener('click', () => {
+  if (!rootNode || selectedIds.size === 0) return;
+  const html = exportBookmarks(rootNode, selectedIds);
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'filtered_bookmarks.html';
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus(`Exported ${selectedIds.size} folders. Import it in Firefox via Bookmarks → Manage Bookmarks → Import and Backup → Import Bookmarks from HTML.`);
+});
+
+// ═══════════════════════════════════════════════════════
+//  FILE LOADING
+// ═══════════════════════════════════════════════════════
+function loadFile(file) {
+  if (!file) return;
+  if (!file.name.match(/\.(html|htm)$/i)) {
+    setStatus('Please open an HTML file exported from Firefox.');
+    return;
+  }
+  setStatus(`Loading ${file.name}…`);
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      _uid = 0;
+      selectedIds.clear();
+      rootNode = parseBookmarks(e.target.result);
+      allFolderNodes = collectFolders(rootNode);
+
+      // Show tree UI
+      document.getElementById('drop-zone').style.display = 'none';
+      document.getElementById('tree-container').style.display = '';
+      document.getElementById('toolbar').style.display = '';
+
+      renderTree(rootNode);
+      updatePreview();
+
+      const total = rootNode.totalBookmarks;
+      const folders = allFolderNodes.length;
+      document.getElementById('tree-pane-header').textContent =
+        `Folder tree — ${file.name}`;
+      setStatus(`Loaded ${total.toLocaleString()} bookmarks across ${folders.toLocaleString()} folders.`);
+      document.getElementById('status-right').textContent = file.name;
+    } catch (err) {
+      setStatus(`Error parsing file: ${err.message}`);
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+document.getElementById('file-input').addEventListener('change', e => {
+  loadFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+// ═══════════════════════════════════════════════════════
+//  DRAG AND DROP
+// ═══════════════════════════════════════════════════════
+const dropZone = document.getElementById('drop-zone');
+
+document.body.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+document.body.addEventListener('dragleave', e => {
+  if (!e.relatedTarget || !document.body.contains(e.relatedTarget)) {
+    dropZone.classList.remove('dragover');
+  }
+});
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+
+// ═══════════════════════════════════════════════════════
+//  DARK MODE
+// ═══════════════════════════════════════════════════════
+function applyDark() {
+  document.documentElement.toggleAttribute('data-dark', darkMode);
+  document.getElementById('btn-dark').textContent = darkMode ? '☀️' : '🌙';
+}
+document.getElementById('btn-dark').addEventListener('click', () => {
+  darkMode = !darkMode;
+  localStorage.setItem('bm_dark', darkMode ? '1' : '0');
+  applyDark();
+});
+applyDark();
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+function setStatus(msg) {
+  document.getElementById('status-text').textContent = msg;
+}
+</script>
+</body>
+</html>
